@@ -34,7 +34,7 @@ func TestRegisterHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to set up test DB: %v", err)
 	}
-	InitDB(db)
+	Initialize(db)
 
 	req, err := http.NewRequest("POST", "/register", strings.NewReader("username=test&email=test@test.com&password=123456"))
 	if err != nil {
@@ -66,7 +66,7 @@ func TestLoginHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to set up test DB: %v", err)
 	}
-	InitDB(db)
+	Initialize(db)
 
 	password := HashPassword("123456")
 	_, err = db.Exec("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", "test", "test@test.com", password)
