@@ -10,7 +10,7 @@ import (
 
 var db *sql.DB
 
-func InitDB(database *sql.DB) {
+func Initialize(database *sql.DB) {
 	db = database
 }
 
