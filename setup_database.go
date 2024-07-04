@@ -62,12 +62,14 @@ func setupDatabase() {
         FOREIGN KEY (user_id) REFERENCES users (id)
     );
 
-    INSERT INTO categories (name, description) VALUES ('Recettes', 'Partagez vos recettes de pâtisserie préférées');
-    INSERT INTO categories (name, description) VALUES ('Techniques de Pâtisserie', 'Discutez des techniques de cuisson, de glaçage, de décoration, etc.');
-    INSERT INTO categories (name, description) VALUES ('Matériel et Ingrédients', 'Échangez des conseils sur les meilleurs ustensiles et ingrédients');
-    INSERT INTO categories (name, description) VALUES ('Photos de Vos Créations', 'Montrez vos réalisations pâtissières et inspirez les autres');
-    INSERT INTO categories (name, description) VALUES ('Questions et Conseils', 'Posez des questions et donnez des conseils sur la pâtisserie');
+    INSERT OR IGNORE INTO categories (name, description) VALUES 
+        ('Recettes', 'Partagez vos recettes de pâtisserie préférées'),
+        ('Techniques de Pâtisserie', 'Discutez des techniques de cuisson, de glaçage, de décoration, etc.'),
+        ('Matériel et Ingrédients', 'Échangez des conseils sur les meilleurs ustensiles et ingrédients'),
+        ('Photos de Vos Créations', 'Montrez vos réalisations pâtissières et inspirez les autres'),
+        ('Questions et Conseils', 'Posez des questions et donnez des conseils sur la pâtisserie');
     `
+
 	_, err = db.Exec(queries)
 	if err != nil {
 		log.Fatal(err)
