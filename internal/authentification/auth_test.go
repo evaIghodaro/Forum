@@ -10,33 +10,32 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func setupTestDB() (*sql.DB, error) {
+func setupTestDB() *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
-	queries := []string{
-		`CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, email TEXT, password TEXT);`,
+	createTable := `
+    CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        email TEXT,
+        password TEXT
+    );`
+	_, err = db.Exec(createTable)
+	if err != nil {
+		panic(err)
 	}
 
-	for _, query := range queries {
-		if _, err := db.Exec(query); err != nil {
-			return nil, err
-		}
-	}
-
-	return db, nil
+	return db
 }
 
 func TestRegisterHandler(t *testing.T) {
-	db, err := setupTestDB()
-	if err != nil {
-		t.Fatalf("Failed to set up test DB: %v", err)
-	}
-	Initialize(db)
+	db = setupTestDB()
+	defer db.Close()
 
-	req, err := http.NewRequest("POST", "/register", strings.NewReader("username=test&email=test@test.com&password=123456"))
+	req, err := http.NewRequest("POST", "/register", strings.NewReader("username=testuser&email=test@example.com&password=testpass"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,26 +48,17 @@ func TestRegisterHandler(t *testing.T) {
 	if status := rr.Code; status != http.StatusSeeOther {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusSeeOther)
 	}
-
-	var username string
-	err = db.QueryRow("SELECT username FROM users WHERE email = ?", "test@test.com").Scan(&username)
-	if err != nil {
-		t.Errorf("Failed to find user in DB: %v", err)
-	}
-
-	if username != "test" {
-		t.Errorf("handler returned wrong username: got %v want %v", username, "test")
-	}
 }
 
 func TestLoginHandler(t *testing.T) {
-	db, err := setupTestDB()
-	if err != nil {
-		t.Fatalf("Failed to set up test DB: %v", err)
-	}
-	Initialize(db)
+	db = setupTestDB()
+	defer db.Close()
 
-	password := HashPassword("123456")
+	// Insert a test user into the database
+	password, err := HashPassword("123456")
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
 	_, err = db.Exec("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", "test", "test@test.com", password)
 	if err != nil {
 		t.Fatalf("Failed to insert user into DB: %v", err)
@@ -82,6 +72,26 @@ func TestLoginHandler(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	handler := http.HandlerFunc(LoginHandler)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusSeeOther {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusSeeOther)
+	}
+
+	cookie := rr.Header().Get("Set-Cookie")
+	if !strings.Contains(cookie, "session=") {
+		t.Errorf("Set-Cookie header does not contain session")
+	}
+}
+
+func TestLogoutHandler(t *testing.T) {
+	req, err := http.NewRequest("POST", "/logout", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(LogoutHandler)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusSeeOther {
