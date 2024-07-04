@@ -1,11 +1,11 @@
 package authentification
 
 import (
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"net/http"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 var db *sql.DB
@@ -14,18 +14,27 @@ func Initialize(database *sql.DB) {
 	db = database
 }
 
-func HashPassword(password string) string {
-	hash := sha256.Sum256([]byte(password))
-	return hex.EncodeToString(hash[:])
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+func CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		username := r.FormValue("username")
 		email := r.FormValue("email")
-		password := HashPassword(r.FormValue("password"))
+		password, err := HashPassword(r.FormValue("password"))
+		if err != nil {
+			http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+			return
+		}
 
-		_, err := db.Exec("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", username, email, password)
+		_, err = db.Exec("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", username, email, password)
 		if err != nil {
 			http.Error(w, "Failed to register user", http.StatusInternalServerError)
 			return
@@ -33,18 +42,18 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	} else {
-		http.ServeFile(w, r, "templates/register.html")
+		http.ServeFile(w, r, "internal/templates/register.html")
 	}
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		email := r.FormValue("email")
-		password := HashPassword(r.FormValue("password"))
+		password := r.FormValue("password")
 
 		var dbPassword string
 		err := db.QueryRow("SELECT password FROM users WHERE email = ?", email).Scan(&dbPassword)
-		if err != nil || dbPassword != password {
+		if err != nil || !CheckPasswordHash(password, dbPassword) {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}
@@ -59,7 +68,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 		http.Redirect(w, r, "/posts", http.StatusSeeOther)
 	} else {
-		http.ServeFile(w, r, "templates/login.html")
+		http.ServeFile(w, r, "internal/templates/login.html")
 	}
 }
 
