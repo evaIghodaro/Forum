@@ -15,6 +15,13 @@ func setupDatabase() {
 	defer db.Close()
 
 	queries := `
+    DROP TABLE IF EXISTS users;
+    DROP TABLE IF EXISTS categories;
+    DROP TABLE IF EXISTS posts;
+    DROP TABLE IF EXISTS comments;
+    DROP TABLE IF EXISTS likes;
+    DROP TABLE IF EXISTS notifications;
+
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
@@ -62,14 +69,19 @@ func setupDatabase() {
         FOREIGN KEY (user_id) REFERENCES users (id)
     );
 
-    INSERT OR IGNORE INTO categories (name, description) VALUES 
+    INSERT INTO categories (name, description) VALUES 
         ('Recettes', 'Partagez vos recettes de pâtisserie préférées'),
         ('Techniques de Pâtisserie', 'Discutez des techniques de cuisson, de glaçage, de décoration, etc.'),
         ('Matériel et Ingrédients', 'Échangez des conseils sur les meilleurs ustensiles et ingrédients'),
         ('Photos de Vos Créations', 'Montrez vos réalisations pâtissières et inspirez les autres'),
         ('Questions et Conseils', 'Posez des questions et donnez des conseils sur la pâtisserie');
-    `
 
+    INSERT INTO users (username, email, password) VALUES ('testuser', 'test@example.com', 'password');
+
+    INSERT INTO posts (title, content, category_id, author_id, approved) VALUES 
+        ('Première publication', 'Ceci est le contenu de la première publication.', 1, 1, 1),
+        ('Deuxième publication', 'Ceci est le contenu de la deuxième publication.', 2, 1, 1);
+    `
 	_, err = db.Exec(queries)
 	if err != nil {
 		log.Fatal(err)
