@@ -56,8 +56,9 @@ func main() {
 	http.HandleFunc("/login", loginHandler)
 	http.HandleFunc("/logout", auth.LogoutHandler)
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		indexHandler(w, r, db)
+	http.HandleFunc("/", indexHandler)
+	http.HandleFunc("/home", func(w http.ResponseWriter, r *http.Request) {
+		homeHandler(w, r, db)
 	})
 	http.HandleFunc("/categories", categoriesHandler)
 	http.HandleFunc("/post", postHandler)
@@ -65,6 +66,9 @@ func main() {
 	http.HandleFunc("/profile", profileHandler)
 
 	http.Handle("/protected", auth.AuthMiddleware(http.HandlerFunc(protectedHandler)))
+
+	// Servir les fichiers statiques
+	http.Handle("/image/", http.StripPrefix("/image/", http.FileServer(http.Dir("./image"))))
 
 	log.Println("Starting server on :8082")
 	fmt.Println("Server is running at http://localhost:8082")
@@ -95,9 +99,19 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func indexHandler(w http.ResponseWriter, _ *http.Request, db *sql.DB) {
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	err := templates.ExecuteTemplate(w, "index.html", nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func homeHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	posts := []Post{}
 	categories := []Category{}
+
+	// Ignorer l'avertissement pour le paramètre non utilisé
+	_ = r
 
 	// Récupérer les derniers posts
 	rows, err := db.Query("SELECT id, title, SUBSTR(content, 1, 100) as snippet FROM posts ORDER BY created_at DESC LIMIT 5")
@@ -141,7 +155,7 @@ func indexHandler(w http.ResponseWriter, _ *http.Request, db *sql.DB) {
 		Categories: categories,
 	}
 
-	if err := templates.ExecuteTemplate(w, "index.html", data); err != nil {
+	if err := templates.ExecuteTemplate(w, "home.html", data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
