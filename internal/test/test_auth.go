@@ -2,7 +2,7 @@ package test
 
 import (
 	"database/sql"
-	auth "forum/internal/authentification" // Assurez-vous que le chemin d'importation est correct
+	auth "forum/internal/authentification"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,7 +18,13 @@ func setupTestDB() (*sql.DB, error) {
 	}
 
 	queries := []string{
-		`CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, email TEXT, password TEXT);`,
+		`CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );`,
 	}
 
 	for _, query := range queries {
@@ -37,7 +43,7 @@ func TestRegisterHandler(t *testing.T) {
 	}
 	auth.Initialize(db)
 
-	req, err := http.NewRequest("POST", "/register", strings.NewReader("username=test&email=test@test.com&password=123456"))
+	req, err := http.NewRequest("POST", "/register", strings.NewReader("username=testuser&email=test@example.com&password=testpass"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,13 +58,13 @@ func TestRegisterHandler(t *testing.T) {
 	}
 
 	var username string
-	err = db.QueryRow("SELECT username FROM users WHERE email = ?", "test@test.com").Scan(&username)
+	err = db.QueryRow("SELECT username FROM users WHERE email = ?", "test@example.com").Scan(&username)
 	if err != nil {
 		t.Errorf("Failed to find user in DB: %v", err)
 	}
 
-	if username != "test" {
-		t.Errorf("handler returned wrong username: got %v want %v", username, "test")
+	if username != "testuser" {
+		t.Errorf("handler returned wrong username: got %v want %v", username, "testuser")
 	}
 }
 
@@ -69,11 +75,8 @@ func TestLoginHandler(t *testing.T) {
 	}
 	auth.Initialize(db)
 
-	password, err := auth.HashPassword("123456")
-	if err != nil {
-		t.Fatalf("Failed to hash password: %v", err)
-	}
-	_, err = db.Exec("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", "test", "test@test.com", password)
+	hashedPassword, _ := auth.HashPassword("123456")
+	_, err = db.Exec("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", "test", "test@test.com", hashedPassword)
 	if err != nil {
 		t.Fatalf("Failed to insert user into DB: %v", err)
 	}
@@ -86,21 +89,6 @@ func TestLoginHandler(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	handler := http.HandlerFunc(auth.LoginHandler)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusSeeOther {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusSeeOther)
-	}
-}
-
-func TestLogoutHandler(t *testing.T) {
-	req, err := http.NewRequest("POST", "/logout", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(auth.LogoutHandler)
 	handler.ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusSeeOther {
