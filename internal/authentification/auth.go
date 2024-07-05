@@ -2,8 +2,8 @@ package authentification
 
 import (
 	"database/sql"
+	"html/template"
 	"net/http"
-	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -28,21 +28,24 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		username := r.FormValue("username")
 		email := r.FormValue("email")
-		password, err := HashPassword(r.FormValue("password"))
+		password := r.FormValue("password")
+
+		hashedPassword, err := HashPassword(password)
 		if err != nil {
-			http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+			http.Error(w, "Unable to create your account", http.StatusInternalServerError)
 			return
 		}
 
-		_, err = db.Exec("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", username, email, password)
+		_, err = db.Exec("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", username, email, hashedPassword)
 		if err != nil {
-			http.Error(w, "Failed to register user", http.StatusInternalServerError)
+			http.Error(w, "Unable to create your account", http.StatusInternalServerError)
 			return
 		}
 
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	} else {
-		http.ServeFile(w, r, "internal/templates/register.html")
+		tmpl, _ := template.ParseFiles("templates/register.html")
+		tmpl.Execute(w, nil)
 	}
 }
 
@@ -51,46 +54,39 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		email := r.FormValue("email")
 		password := r.FormValue("password")
 
-		var dbPassword string
-		err := db.QueryRow("SELECT password FROM users WHERE email = ?", email).Scan(&dbPassword)
-		if err != nil || !CheckPasswordHash(password, dbPassword) {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		var hash string
+		err := db.QueryRow("SELECT password FROM users WHERE email = ?", email).Scan(&hash)
+		if err != nil {
+			http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 			return
 		}
 
-		cookie := &http.Cookie{
-			Name:     "session",
-			Value:    email,
-			Expires:  time.Now().Add(24 * time.Hour),
-			HttpOnly: true,
+		if !CheckPasswordHash(password, hash) {
+			http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+			return
 		}
-		http.SetCookie(w, cookie)
 
-		http.Redirect(w, r, "/posts", http.StatusSeeOther)
+		http.Redirect(w, r, "/home", http.StatusSeeOther)
 	} else {
-		http.ServeFile(w, r, "internal/templates/login.html")
+		tmpl, _ := template.ParseFiles("templates/login.html")
+		tmpl.Execute(w, nil)
 	}
 }
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
-	cookie := &http.Cookie{
-		Name:     "session",
-		Value:    "",
-		Expires:  time.Now().Add(-1 * time.Hour),
-		HttpOnly: true,
-	}
-	http.SetCookie(w, cookie)
-
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("session")
-		if err != nil || cookie.Value == "" {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+		// Example: Check if the user is authenticated
+		// In a real application, you should check session or token here
+		if r.URL.Path == "/login" || r.URL.Path == "/register" {
+			next.ServeHTTP(w, r)
 			return
 		}
-		next.ServeHTTP(w, r)
+
+		// Redirect to login page if not authenticated
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	})
 }
